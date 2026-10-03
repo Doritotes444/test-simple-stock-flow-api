@@ -1,0 +1,22 @@
+{
+    "name": "code-sena/test-simple-stock-flow-api",
+    "type": "project",
+    "description": "API REST en Arquitectura Onion de 4 Capas para Simple Stock Flow",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
