@@ -4,62 +4,58 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Repositories;
 
-use App\Application\Ports\Outbound\ISaleRepositoryPort;
-use App\Domain\Model\Sale;
-use App\Infrastructure\Persistence\Eloquent\Models\SaleEloquentModel;
-use App\Infrastructure\Persistence\Eloquent\Models\SaleItemEloquentModel;
+use App\Application\Ports\Outbound\SaleRepositoryInterface;
+use App\Domain\Entities\Sale;
+use App\Domain\ValueObjects\DateRange;
 use App\Infrastructure\Persistence\Mappers\SaleMapper;
-use DateTimeImmutable;
-use Illuminate\Support\Facades\DB;
+use App\Infrastructure\Persistence\Models\SaleItemModel;
+use App\Infrastructure\Persistence\Models\SaleModel;
 
-class EloquentSaleRepository implements ISaleRepositoryPort
+final class EloquentSaleRepository implements SaleRepositoryInterface
 {
-    public function save(Sale $sale): Sale
+    public function findById(string $id): ?Sale
     {
-        return DB::transaction(function () use ($sale) {
-            $saleModel = SaleEloquentModel::create([
-                'user_id' => $sale->getUserId(),
-                'total' => $sale->getTotal()->getAmount(),
-                'currency' => $sale->getTotal()->getCurrency(),
-                'created_at' => $sale->getCreatedAt()->format('Y-m-d H:i:s'),
+        $model = SaleModel::query()->with('items')->find($id);
+        return $model !== null ? SaleMapper::toDomain($model) : null;
+    }
+
+    public function searchByDateRangePaginated(DateRange $range, int $page, int $size): array
+    {
+        $fromStr = $range->from()->format('Y-m-d H:i:s.u');
+        $toStr = $range->to()->format('Y-m-d H:i:s.u');
+
+        $query = SaleModel::query()
+            ->with('items')
+            ->where('sold_at', '>=', $fromStr)
+            ->where('sold_at', '<', $toStr);
+
+        $total = $query->count();
+        $models = $query->orderBy('sold_at', 'desc')
+            ->forPage($page, $size)
+            ->get();
+
+        $items = $models->map(fn(SaleModel $m) => SaleMapper::toDomain($m))->all();
+
+        return [
+            'items' => $items,
+            'total' => $total,
+        ];
+    }
+
+    public function save(Sale $sale): void
+    {
+        $saleData = SaleMapper::toPersistence($sale);
+        SaleModel::query()->create($saleData);
+
+        foreach ($sale->items() as $item) {
+            SaleItemModel::query()->create([
+                'sale_id' => $sale->id(),
+                'product_id' => $item->productId(),
+                'product_name' => $item->productName(),
+                'unit_price' => $item->unitPrice()->amount(),
+                'category_name' => $item->categoryName(),
+                'quantity' => $item->quantity()->value(),
             ]);
-
-            foreach ($sale->getItems() as $item) {
-                SaleItemEloquentModel::create([
-                    'sale_id' => $saleModel->id,
-                    'product_id' => $item->getProductId(),
-                    'product_name' => $item->getProductName(),
-                    'quantity' => $item->getQuantity()->getValue(),
-                    'unit_price' => $item->getUnitPrice()->getAmount(),
-                    'subtotal' => $item->getSubtotal()->getAmount(),
-                    'currency' => $item->getUnitPrice()->getCurrency(),
-                ]);
-            }
-
-            $saleModel->load('items');
-            return SaleMapper::toDomain($saleModel);
-        });
-    }
-
-    public function findById(int $id): ?Sale
-    {
-        $saleModel = SaleEloquentModel::with('items')->find($id);
-        return $saleModel ? SaleMapper::toDomain($saleModel) : null;
-    }
-
-    public function findByDateRange(?DateTimeImmutable $startDate, ?DateTimeImmutable $endDate): array
-    {
-        $query = SaleEloquentModel::with('items');
-
-        if ($startDate) {
-            $query->where('created_at', '>=', $startDate->format('Y-m-d 00:00:00'));
         }
-
-        if ($endDate) {
-            $query->where('created_at', '<=', $endDate->format('Y-m-d 23:59:59'));
-        }
-
-        $models = $query->orderBy('created_at', 'desc')->get();
-        return $models->map(fn($m) => SaleMapper::toDomain($m))->all();
     }
 }

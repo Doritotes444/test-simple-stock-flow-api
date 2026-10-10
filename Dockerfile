@@ -1,28 +1,24 @@
-FROM php:8.2-fpm-alpine
+FROM php:8.2-cli-alpine
+
+RUN apk add --no-cache bash mysql-client git libzip-dev \
+    && docker-php-ext-install pdo_mysql bcmath
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Instalar dependencias del sistema y extensiones de PHP para MySQL y JWT
-RUN apk add --no-cache \
-    bash \
-    git \
-    curl \
-    libpng-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    oniguruma-dev \
-    linux-headers \
-    $PHPIZE_DEPS \
-    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
+COPY . .
 
-# Instalar Composer
-COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader || true
 
-# Copiar archivos del proyecto
-COPY . /var/www/html
+RUN mkdir -p /var/www/media \
+    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs \
+    && chmod -R 777 storage bootstrap/cache /var/www/media
 
-# Exponer el puerto para el servidor integrado de desarrollo de PHP / FPM
 EXPOSE 8000
 
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]

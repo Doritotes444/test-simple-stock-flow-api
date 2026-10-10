@@ -4,40 +4,33 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Mappers;
 
-use App\Domain\Model\Product;
-use App\Domain\ValueObject\Money;
-use App\Domain\ValueObject\Sku;
-use App\Domain\ValueObject\Stock;
-use App\Infrastructure\Persistence\Eloquent\Models\ProductEloquentModel;
+use App\Domain\Entities\Product;
+use App\Domain\ValueObjects\Money;
+use App\Infrastructure\Persistence\Models\ProductModel;
 
-class ProductMapper
+final class ProductMapper
 {
-    public static function toDomain(ProductEloquentModel $model): Product
+    public static function toDomain(ProductModel $model): Product
     {
         return new Product(
-            id: (int) $model->id,
-            sku: new Sku((string) $model->sku),
-            name: (string) $model->name,
-            price: new Money((float) $model->price, (string) ($model->currency ?? 'COP')),
-            stock: new Stock((int) $model->stock),
-            categoryId: (int) $model->category_id,
-            description: $model->description,
-            isActive: (bool) $model->is_active
+            (string) $model->id,
+            (string) $model->name,
+            Money::of((float) $model->price),
+            (int) $model->stock,
+            (string) $model->category_id,
+            $model->image_key !== null ? (string) $model->image_key : null
         );
     }
 
-    public static function toEloquent(Product $entity, ?ProductEloquentModel $model = null): ProductEloquentModel
+    public static function toPersistence(Product $domain): array
     {
-        $model = $model ?? new ProductEloquentModel();
-        $model->sku = $entity->getSku()->getCode();
-        $model->name = $entity->getName();
-        $model->description = $entity->getDescription();
-        $model->price = $entity->getPrice()->getAmount();
-        $model->currency = $entity->getPrice()->getCurrency();
-        $model->stock = $entity->getStock()->getUnits();
-        $model->category_id = $entity->getCategoryId();
-        $model->is_active = $entity->isActive();
-
-        return $model;
+        return [
+            'id' => $domain->id(),
+            'name' => $domain->name(),
+            'price' => $domain->price()->amount(),
+            'stock' => $domain->stock(),
+            'category_id' => $domain->categoryId(),
+            'image_key' => $domain->imageKey(),
+        ];
     }
 }

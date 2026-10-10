@@ -3,6 +3,10 @@
 .env.backup
 .env.production
 .phpunit.result.cache
-*.log
-.DS_Store
-Thumbs.db
+/storage/*.key
+/storage/app/media/*
+!/storage/app/media/.gitignore
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*

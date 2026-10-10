@@ -4,37 +4,49 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Mappers;
 
-use App\Domain\Model\Sale;
-use App\Domain\Model\SaleItem;
-use App\Domain\ValueObject\Money;
-use App\Domain\ValueObject\Quantity;
-use App\Infrastructure\Persistence\Eloquent\Models\SaleEloquentModel;
+use App\Domain\Entities\Sale;
+use App\Domain\Entities\SaleItem;
+use App\Domain\ValueObjects\Money;
+use App\Domain\ValueObjects\Quantity;
+use App\Infrastructure\Persistence\Models\SaleItemModel;
+use App\Infrastructure\Persistence\Models\SaleModel;
 use DateTimeImmutable;
 
-class SaleMapper
+final class SaleMapper
 {
-    public static function toDomain(SaleEloquentModel $model): Sale
+    public static function toDomain(SaleModel $model): Sale
     {
         $items = [];
         foreach ($model->items as $itemModel) {
-            $currency = $itemModel->currency ?? $model->currency ?? 'COP';
             $items[] = new SaleItem(
-                id: (int) $itemModel->id,
-                productId: (int) $itemModel->product_id,
-                productName: (string) $itemModel->product_name,
-                quantity: new Quantity((int) $itemModel->quantity),
-                unitPrice: new Money((float) $itemModel->unit_price, $currency)
+                (string) $itemModel->product_id,
+                (string) $itemModel->product_name,
+                Money::of((float) $itemModel->unit_price),
+                (string) $itemModel->category_name,
+                new Quantity((int) $itemModel->quantity)
             );
         }
 
-        $createdAt = $model->created_at ? DateTimeImmutable::createFromInterface($model->created_at) : new DateTimeImmutable();
+        $soldAt = $model->sold_at instanceof \DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($model->sold_at)
+            : new DateTimeImmutable((string) $model->sold_at);
 
         return new Sale(
-            id: (int) $model->id,
-            userId: (int) $model->user_id,
-            items: $items,
-            total: new Money((float) $model->total, (string) ($model->currency ?? 'COP')),
-            createdAt: $createdAt
+            (string) $model->id,
+            $soldAt,
+            (string) $model->sold_by_user_id,
+            (string) $model->sold_by_username,
+            $items
         );
+    }
+
+    public static function toPersistence(Sale $domain): array
+    {
+        return [
+            'id' => $domain->id(),
+            'sold_at' => $domain->soldAt()->format('Y-m-d H:i:s.u'),
+            'sold_by_user_id' => $domain->soldByUserId(),
+            'sold_by_username' => $domain->soldByUsername(),
+        ];
     }
 }

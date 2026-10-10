@@ -4,45 +4,35 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Repositories;
 
-use App\Application\Ports\Outbound\IUserRepositoryPort;
-use App\Domain\Model\User;
-use App\Domain\ValueObject\Email;
-use App\Infrastructure\Persistence\Eloquent\Models\UserEloquentModel;
+use App\Application\Ports\Outbound\UserRepositoryInterface;
+use App\Domain\Entities\User;
+use App\Infrastructure\Persistence\Mappers\UserMapper;
+use App\Infrastructure\Persistence\Models\UserModel;
 
-class EloquentUserRepository implements IUserRepositoryPort
+final class EloquentUserRepository implements UserRepositoryInterface
 {
-    public function findById(int $id): ?User
+    public function findById(string $id): ?User
     {
-        $model = UserEloquentModel::find($id);
-        return $model ? $this->toDomain($model) : null;
+        $model = UserModel::query()->find($id);
+        return $model !== null ? UserMapper::toDomain($model) : null;
     }
 
-    public function findByEmail(Email $email): ?User
+    public function findByUsername(string $username): ?User
     {
-        $model = UserEloquentModel::where('email', $email->getValue())->first();
-        return $model ? $this->toDomain($model) : null;
+        $model = UserModel::query()->where('username', $username)->first();
+        return $model !== null ? UserMapper::toDomain($model) : null;
     }
 
-    public function save(User $user): User
+    public function existsByUsername(string $username): bool
     {
-        $model = new UserEloquentModel();
-        $model->name = $user->getName();
-        $model->email = $user->getEmail()->getValue();
-        $model->password = $user->getPasswordHash();
-        $model->role = $user->getRole();
-        $model->save();
-
-        return $this->toDomain($model);
+        return UserModel::query()->where('username', $username)->exists();
     }
 
-    private function toDomain(UserEloquentModel $model): User
+    public function save(User $user): void
     {
-        return new User(
-            id: (int) $model->id,
-            name: (string) $model->name,
-            email: new Email((string) $model->email),
-            passwordHash: (string) $model->password,
-            role: (string) ($model->role ?? 'CASHIER')
+        UserModel::query()->updateOrCreate(
+            ['id' => $user->id()],
+            UserMapper::toPersistence($user)
         );
     }
 }
